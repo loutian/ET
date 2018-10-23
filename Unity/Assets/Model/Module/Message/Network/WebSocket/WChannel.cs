@@ -20,6 +20,8 @@ namespace ETModel
 
         private readonly MemoryStream memoryStream;
 
+        private readonly MemoryStream recvStream;
+
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         
         public WChannel(HttpListenerWebSocketContext webSocketContext, AService service): base(service, ChannelType.Accept)
@@ -31,6 +33,7 @@ namespace ETModel
             this.webSocket = webSocketContext.WebSocket;
             
             this.memoryStream = this.GetService().MemoryStreamManager.GetStream("message", ushort.MaxValue);
+            this.recvStream = this.GetService().MemoryStreamManager.GetStream("message", ushort.MaxValue);
 
             isConnected = true;
         }
@@ -42,6 +45,7 @@ namespace ETModel
             this.webSocket = webSocket;
             
             this.memoryStream = this.GetService().MemoryStreamManager.GetStream("message", ushort.MaxValue);
+            this.recvStream = this.GetService().MemoryStreamManager.GetStream("message", ushort.MaxValue);
 
             isConnected = false;
         }
@@ -78,8 +82,8 @@ namespace ETModel
             {
                 return;
             }
-            this.StartRecv();
-            this.StartSend();
+            this.StartRecv().NoAwait();
+            this.StartSend().NoAwait();
         }
         
         private WService GetService()
@@ -87,7 +91,7 @@ namespace ETModel
             return (WService)this.service;
         }
 
-        public async void ConnectAsync(string url)
+        public async ETVoid ConnectAsync(string url)
         {
             try
             {
@@ -110,11 +114,11 @@ namespace ETModel
 
             if (this.isConnected)
             {
-                this.StartSend();
+                this.StartSend().NoAwait();
             }
         }
 
-        public async void StartSend()
+        public async ETVoid StartSend()
         {
             if (this.IsDisposed)
             {
@@ -160,7 +164,7 @@ namespace ETModel
             }
         }
 
-        public async void StartRecv()
+        public async ETVoid StartRecv()
         {
             if (this.IsDisposed)
             {
@@ -173,9 +177,9 @@ namespace ETModel
                     try
                     {
 #if SERVER
-                        ValueWebSocketReceiveResult receiveResult = await this.webSocket.ReceiveAsync(new Memory<byte>(this.Stream.GetBuffer(), 0, this.Stream.Capacity), cancellationTokenSource.Token);
+                        ValueWebSocketReceiveResult receiveResult = await this.webSocket.ReceiveAsync(new Memory<byte>(this.recvStream.GetBuffer(), 0, this.recvStream.Capacity), cancellationTokenSource.Token);
 #else
-                        WebSocketReceiveResult receiveResult = await this.webSocket.ReceiveAsync(new ArraySegment<byte>(this.Stream.GetBuffer(), 0, this.Stream.Capacity), cancellationTokenSource.Token);
+                        WebSocketReceiveResult receiveResult = await this.webSocket.ReceiveAsync(new ArraySegment<byte>(this.recvStream.GetBuffer(), 0, this.recvStream.Capacity), cancellationTokenSource.Token);
 #endif
                         
                         if (this.IsDisposed)
@@ -195,8 +199,8 @@ namespace ETModel
                             return;
                         }
                         
-                        this.Stream.SetLength(receiveResult.Count);
-                        this.OnRead(this.Stream);
+                        this.recvStream.SetLength(receiveResult.Count);
+                        this.OnRead(this.recvStream);
                     }
                     catch (Exception)
                     {
